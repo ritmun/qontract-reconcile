@@ -287,6 +287,51 @@ def promotions_mermaid(ctx, app):
 
 
 @get.command()
+@click.pass_context
+def promotions_report(ctx):
+    saas_files = get_saas_files()
+    print(f" App, SAAS File, Target Cluster, Resource Template, Job Name, Gated By, Owner Emails, Owner Names")
+            
+    for s in saas_files:
+        include  = False    # only include files with gateless jobs
+        appname = s.app.name
+        filepath =  "https://gitlab.cee.redhat.com/service/app-interface/-/blob/master/data/" + s.path.lstrip("/")
+        owners = s.app.service_owners or []
+        emails =   "\n".join([o.email for o in owners])
+        names =   "\n".join([o.name for o in owners])
+        sector = []
+        rtname = []
+        tname = []
+        for rt in s.resource_templates:
+            for t in rt.targets:
+                if t.name is None:
+                    t.name = "noname_job" 
+                node = f"{s.name}/{rt.name}/{t.name}/{sector}"
+# assumption: test jobs have the string "test", "e2e", "-gate" , "qe" in the job name or resource template name
+# remove them from report 
+                if(  ("e2e" in node) or ("test" in node) or ("-qe-" in node)  or ("-gate" in node)):
+                    continue
+             
+                subscriptions = 0                
+                if t.promotion is not None and t.promotion.subscribe:
+                    for chan in t.promotion.subscribe:
+                        subscriptions=subscriptions+1
+# if this target is ungated, add to report                     
+                if subscriptions==0:
+                    include = True
+                    tname.append(t.name)  
+                    sector.append(t.namespace.cluster.name)
+                    rtname.append(rt.name)
+             
+        sectorstring =   "\n".join(sector)
+        rtnamestring =   "\n".join(rtname)
+        targetstring =   "\n".join(tname)
+ 
+        if include:
+            print(f" {appname}, {filepath}, \"{sectorstring}\", \"{rtnamestring}\",\"{targetstring}\", none ,\"{emails}\",\"{names}\"")
+        
+                
+@get.command()
 @click.argument("name", default="")
 @click.pass_context
 def cluster_upgrades(ctx, name):
